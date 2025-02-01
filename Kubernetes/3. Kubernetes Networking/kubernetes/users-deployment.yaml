@@ -17,4 +17,4 @@ spec:
           image: sam519/kub-demo-users-api:latest
           env:
             - name: AUTH_ADDRESS
-              value: "10.103.207.24"
+              value: "auth-service.default"
