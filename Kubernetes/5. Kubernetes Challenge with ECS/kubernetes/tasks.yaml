@@ -30,6 +30,6 @@ spec:
           image: sam519/kub-dep-tasks-api:latest
           env:
             - name: MONGODB_CONNECTION_URI
-              value: 'mongodb+srv://usamajat:pu0lR7C8gk2BGT67@mongodb.kqfel.mongodb.net/?retryWrites=true&w=majority&appName=mongodb'
+              value: 'mongodb+srv://name:pass@mongodb.kqfel.mongodb.net/?retryWrites=true&w=majority&appName=mongodb'
             - name: AUTH_API_ADDRESS
               value: 'auth-service.default:3000'
