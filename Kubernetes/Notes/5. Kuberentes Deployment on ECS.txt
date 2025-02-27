@@ -1,0 +1,35 @@
+Kubernetes - Deployments (AWS EKS):
+AWS EKS vs AWS ECS:
+--> AWS Elastic Kubernetes Service is managed service for Kubernetes deployments while ECS is a managed service for container deployments.
+--> In EKS no AWS-specific syntax or philosophy required while in ECS AWS-specific syntax and philosophy applies.
+--> Use standard Kubernetes configurations and resources while ECS uses AWS-specific configuration and concepts.
+
+Preparing the Starting Project:
+Here our project setup contains auth-api folder, users-api folder and then kubernetes folder. Kubernetes folder contains users deployment and service file and auth deployment and service file. And here we need to make some adjustments first we need to build and push images of auth and users, then we need to create a free atlas cluster on mongodb and then we need to create a user and password for that cluster then copy its address and paste into our users.yml file.
+
+Creating and configuring the Kuberentes Cluster with EKS:
+Now we first need to create an EKS cluster on AWS. For this we go to AWS console and search for EKS and open that. Here we click on Create Cluster, Then:
+- Select Custom Config.
+- Then give our cluster a name and choose a version.
+- Then Create a IAM role for EKS and select it here.
+-- For creating a IAM role we visit IAM and here select AWS Service as entity type, then choose EKS in service and select EKS - Cluster from Use case then click next and here automatically this policy will be assigned AmazonEKSClusterPolicy then click next give our role a name and create it.
+- Then Create a VPC for our cluster for this use cloud formation and here paste this 'https://s3.us-west-2.amazonaws.com/amazon-eks/cloudformation/2020-10-29/amazon-eks-vpc-private-subnets.yaml' this will create a VPC for our cluster. Then select in our cluster.
+- Cluster endpoint access should be Public and private then click next.
+- After that we select kube-proxy, coredns and amazon VPI CNI add-ons and create cluster (I created without add ons and get into error).
+
+Then we install aws cli on our local machine and configure it using aws configure command. For that we generated root access keys from aws and used them.
+After that we connect our local kubectl with our eks cluster and update our config file using this command: 'aws eks update-kubeconfig --region region-code --name my-cluster'.
+
+Adding Worker Nodes:
+After creating our cluster we need to add worker node in it. For this we go to compute tab of our cluster and click Create new node Group and give it a name (dep-demo-nodes). Then give it a IAM role to create a role for worker node we go to IAM create role and here create a role with these policies: 'AmazonEKSWorkerNodePolicy', 'AmazonEK_CNI_Policy' and 'AmazonEC2ContainerRegistryReadOnly'. After creating role assign it to node group and click next.
+After that we set our Compute config for our nodes, here AMI type is Amazon linux2 (AL2_x86_64), capacity is on demand, instance type is t3.small and everything else is default. Click next and disallow the remote access in network section then review and create node group.
+
+After that our node group is created and our aws cli is configured we can use kubectl apply command to apply our conigurations from our local machine. After applying we can use kubectl get service command to get the load balancer assigned address of our users pod. And using APIdog we can send requests to that address/signup.
+
+Getting Started with Volumes:
+For volume we wanna use AWS EFS, for this first we wanna install csi driver to do this we go to efs csi github and copy the command and run it: 'kubectl apply -k "github.com/kubernetes-sigs/aws-efs-csi-driver/deploy/kubernetes/overlays/stable/?ref=release-2.0"'. After that we wanna create EFS for our project and before that we need to create a security group for our efs. So we go to EC2 page and from here go to security group and create new sg and here give it a name (eks-efs-sg) and description and then select vpc which we assigned to eks. Then in Inbound rules select type=NFS, source = custom and the value here will be the CIDR address of our VPC and then create security group. After that go to EFS click create EFS give it name (eks EFS) select vpc of our EKS then click customize. Leave everything as default then move to netwrok access section and here select security group that we just created in both Availability zones. Then click next next and create.
+
+Creating a Persistent Volume for EFS:
+Now we wanna Persistent volume to our Cluster for that we modify the code of our Users.yaml file and before users service we add resource definition of users volume using --- and here we first give it a version, metadata, spec and in spec we give it capacity of 5Gi then volumeMode will be Filesystem. Then add accessModes and set it to ReadWriteMode, then add storageClassName of efs-sc then csi inside csi driver is efs.csi.aws.com and volumeHandle is fs-0b97a441085459d2e. After that we add another resource definition before our Persistent volume and here we define our storage class source(https://github.com/kubernetes-sigs/aws-efs-csi-driver/blob/master/examples/kubernetes/static_provisioning/specs/storageclass.yaml). 
+After adding our Persistent Volume we now add another resource PersistentVolumeClaim. Here we specify the claim for our volume, like how much storage we are claiming accessModes.
+After that we modify code of our user deployment here we assign that claimed volume to our pod and. Then we update also image of our user then push it. Then we re apply our users deployment.

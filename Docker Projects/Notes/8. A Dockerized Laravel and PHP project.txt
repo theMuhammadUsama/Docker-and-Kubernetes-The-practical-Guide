@@ -1,0 +1,62 @@
+A Laravel and PHP Dockerized Project:
+Target Setup:
+First we store all our Application code in one local folder.
+Then we create three APP containers which are:
+i. PHP Interpreter: That is a container which have PHP installed in it and it has access to our local stored code.
+ii. Nginx Web Server: This container runs a Web Server.
+iii. MySQL Database: This container contains a Database for storing data.
+Then we also create and use three utility containers:
+i. Composer: This is a package manager for PHP just like npm for node. It is used to install third party packages and laravel will also use it to install dependencies.
+ii. Laravel Artisan: 
+iii. npm: Here we also use npm for frontend logic.
+
+Building Our Project:
+Adding Nginx Container:
+We start our project in empty folder where we create docker-compose file. Inside that file we list all our services (6). We also create nginx folder inside our project folder. That nginx folder contains nginx.conf file for now.
+In our project folder we create folder dockerfiles then inside it we create  file php.dockerfile and it look like:
+FROM php:7.4-fpm-alpine
+WORKDIR /var/www/html
+RUN docker-php-ext-install pdo pdo_mysql
+After that we create another dockerfile for composer which contains:
+FROM composer:latest
+WORKDIR var/www/html
+ENTRYPOINT ["composer", "--ignore-platform-reqs"]
+
+Creating our docker-compose file like this: 
+version: '3.8'
+
+services: 
+  server:
+    image: nginx:stable-alpine
+    ports:
+      - '8000:80'
+    volumes:
+      - ./src:/var/www/html
+      - ./nginx/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+  php:
+    build:
+      context: ./dockerfiles
+      dockerfile: php.dockerfile
+    volumes:
+      - ./src:/var/www/html:delegated
+
+  mysql: 
+    image: mysql:5.7
+    env_file:
+      - ./env/mysql.env
+
+  composer:
+    build:
+      context: ./dockerfiles
+      dockerfile: composer.dockerfile
+    volumes:
+      - ./src:/var/www/html
+
+
+env/mysql.env:
+MYSQL_DATABASE=homestead
+MYSQL_USER=homestead
+MYSQL_PASSWORD=secret
+MYSQL_ROOT_PASSWORD=secret
+# :delegated means if the container writes some data it shouldn't instantly reflected back to host machine.
+Now that we have added four sevices till composer now we run our composer service using: docker-compose run --rm composer create-project --prefer-dist laravel/laravel .  after its completed it install laravel inside our local mounted folder (src). Inside that folder we have an .env file which we now edit. And here we replace DB_CONNECTION=mysql DB_HOST=mysql DB_DATABASE= our database name homestead(from mysql.env file) DB_USERNAME=homestead and DB_PASSWORD=mypass.

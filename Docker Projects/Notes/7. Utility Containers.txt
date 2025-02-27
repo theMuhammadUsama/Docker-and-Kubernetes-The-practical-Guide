@@ -1,0 +1,11 @@
+We can also execute certain commands inside running container beside it's default command. We can do this like: docker exec -it running_container_name npm init
+We can overwrite default command of container by giving our command when we run container like this: docker run -it node npm init. Here npm init replaces the node's default command to start server.
+NOTE: We can change the mode of running container from detached mode to attached using following command: docker container attach container_name.
+
+Building First Utility Container:
+Here we only create our docker file in our project folder with only two commands FROM node:14-alpine WORKDIR. And we also want to mirror all data of our container inside our local machine, and we can do this using bind mount. So after building image our run command would be like this: docker run -it -v /path/to/mount:/app image_name npm init. Here npm init is our command that executes when we run container.
+
+Utilizing ENTRYPOINT:
+Entrypoint is a command of dockerfile it works like CMD but only difference is when we give additional command(npm init) when we run container the CMD is overwritten while with Entrypoint when we give addintional command it is appended with entrypoint. For example if we want our utility container just to work with npm we gave Entrypoint value of npm. And then when ever we run our container with additional commands of npm like init, install they will work fine. Our command might look like this: docker run -it -v "E:/Vs-Projects/8. Utility Container:/app" util-ent install express --save
+Using Docker Compose in Utility container:
+We can add docker compose file in our utility container and here we only have one service npm with build, stdin, tty and volumes etc. And to give command for our npm we use docker-compose run instead of start using like: docker-compose run npm init. 

@@ -1,0 +1,69 @@
+Docker Compose is a tool that allows you to define and manage multi-container Docker applications using a simple YAML file. Instead of running individual docker run commands, you can define services, networks, and volumes in a single docker-compose.yml file and deploy everything with one command. It allows us to replace one or many docker build and run commands with just one configuration file. Using this file we can build start or stop our multi container app  with one command.
+Docker. 
+
+Writing Docker Compose File:
+Docker Compose file contain, Services(Containers) and below every service we configure every service like:
+Which Port should be publish.
+Which Environment Variable should be set.
+Volumes that should be assigned to that service. 
+And Network that should be assigned to that service.
+What Docker Compose is NOT:
+--> Docker Compose does not replace Dockerfiles for custom images.
+--> Docker Compose does not replace Images or Containers.
+--> Docker Compose is not suited for managing multiple containers on different hosts(machines).
+
+Creating a Compose file:
+To start with docker compose we first creat docker-compose file with .yaml or yml extension in our project folder. Like for me I create my docker compose file in my Multi Container App(from last Module) folder. And YAML is just a text format where we use indentation to express dependencies between configuration options. Here we describe our project setup. This file starts with Defining version. It is the version of the docker compose specificatin we wanna use. Then we define services which include all services(containers) our project have. Each service is a child of service and indented by double spaces. And then in each service we define its configuration.
+version: "3.8"
+services:
+  mongodb:
+    image: 'mongo'
+    #container_name: mongodb
+    volumes: 
+      - data:/data/db
+    environment: 
+      MONGO_INITDB_ROOT_USERNAME: max
+      #MONGO_INITDB_ROOT_USERNAME=max
+      MONGO_INITDB_ROOT_PASSWORD: secret
+    #OR
+    env_file:  
+      - ./folder/mongo.env
+
+ 
+          
+  backend:
+    build: ./backend  #This will automatically build image in backend folder.
+    #build:
+      #context: ./backend  #location of dockerfile
+      #dockerfile: Dockerfile #name of dockerfile
+      #args:
+        some-args:''
+    ports:
+      - '80:80'
+    volumes:
+      - logs:/app/logs
+      -./backend:/app #We can use Relative path for bind mounts in docker compose file
+      -/app/node_modules
+    env_file:    
+      - ./env/backend.env
+    depends_on:
+      - mongodb # depends on contains list of all serviecs this backend depend on
+    
+  frontend:
+    build: ./frontend
+    ports:
+      - '3000:3000'
+    volumes:
+      - ./frontend/src:/app/src
+    stdin_open: true  #For interactive mode
+    tty: true # for interactive terminal
+    depends_on:
+      - backend
+    
+
+ volumes:
+    data: #all named volumes that are specified in services should be listed
+    logs:
+
+Docker Compose up and down:
+After we have created our docker compose file we can use docker compose up command to start our services we can use -d flag to start it in detach mode. And to stop our services we can use docker compose down to stop and delete all containers we can use -v flag with it to also remove volumes. We can use --build flag with docker-compose up to re build images.

@@ -1,0 +1,49 @@
+Kubernetes Networking:
+Here we will learn about Kubernetes communtication, how pods communicate with each other and how pods communicate with outside world. 
+Starting Project and Our Goal:
+In our starting project we have node app which have three services(containers) which are Auth API, Users API and Tasks API. We start our project with creating a deployment where Auth API and Users API are in same Pod and both can communicate internally but We as a user can only communicate with Users API. And Tasks API in a separate Pod and we can communicate with it.
+
+Creating a First Deployment:
+For our first deployment we just wanna deploy our users api to kubernetes. For this first we modify the code of our user-app.js file so that it can run standalone because currently it have route/address to auth-api. After modifying our code we build image of our users-api and then push it to docker hub. After that we create a new folder named kubernetes in our project where we create all our kubernets config file (deployments service etc). And inside that folder we create a file named users-deployment.yaml. Here in this file we specify all our configurations like name kind spec etc and save the file and apply it. After that we can see that our deployment is created.
+
+Another Look at Services:
+Now that we have deployed our users app in cluster we want to access it for this we need service. So first we create a service file and here we specify config for our service like name kind spec ports etc. After that we apply our service and our sevice will be created. Then we use minikube service service-name to get a address for our service. 
+
+Multiple Containers in one Pod:
+Here we create another container named auth api in our same Pod. But before that we undo changes that we made in user-app.js and also we replcae auth in URL address with variable AUTH_ADDRESS and use backtick` instead of '. After modifying that changes in our users-app.js file we rebuild our image and push it to docker hub. Then we also create the image of our auth api and push it also. After that we modify our deployment.yaml file and here here after users container we add another container and with name of auth and image of auth. For Pod internal communication we don't need to change anything in service file.
+
+Pod Internal Communication:
+For pod internal communication we can use localhost as value of AUTH_ADDRESS.
+For this first we create a envrironment variable in our users-deployment.yaml file, here inside containers after our users container we create variable like this:
+        - name: users
+          image: sam519/kub-demo-users-api:latest
+          env:
+            - name: AUTH_ADDRESS
+              value: localhost
+And now that we have created our variable and both our images are pushed to dockerhub we apply changes to our deployment using kubectl apply -f users-deployment.yaml command. After that we can try sending post request with body value email and password in json format to our app using apidog and here at both /signup and /login we are getting response.
+
+Creating Multiple Deployments:
+Until now we have created our deployment with two containers inside one pod but now we wanna change that approach. Because till now we created only two containers User-API which can communincate outside of cluser and Auth-API which is communicating internally inside Pod with Auth-API. Now we will create another pod with Task-API container and that pod also need to communicate with Auth-API. For this we will modify our cluster that it contains three Pods one running Auth-API, one running Users-API and one running Tasks-API. And for communictaion both Tasks-API and Users-API can communicate with outside world and they can also communicate internally with Auth-API and Auth-API can't communicate with outside world. So for that first we create a new deployment file for auth named auth-deployment.yaml which is similar to users-deployment file but in container it contains only auth container. We also remove auth from users-deployment file. After our auth deployment file is created we also create a service file for auth so that its IP remains stable and not changes while scale up or down or pod restarts. So our service file for auth is named as auth-service and it is similar to users service file except here type is ClusterIP and port is 80. Now it won't work because value of environment variable is localhost which not works anymore because we create separate pod for auth.
+
+Pod to Pod Communication with IP Address and Environment Variables:
+Now that we have created our deployments for both users and auth and they both are running in different Pods and we want them to communicate internally we make some modification. First we apply both deployment and service files of auth. Then using the command: kubectl get services we can see the IP addresss of of our auth service so we copy the IP Address and paste it as the value of AUTH_ADDRESS in our user deployment file. After that we apply our deployment of user and everything is working fine. Now there is a better way of getting the IP address of auth then hard coding it. We can take advantage of automatically generated env variable which is automatically generated and configured by kubernetes. For that we can use env variable like our service name all capital and - replaced by _ and the _SERVICE_HOST. So using that we can replace our hard coded variable on line 58 in users-app.js with process.env.AUTH_SERVICE_SERVICE_HOST and kubernetes will automatically use IP address for this variable. After that we rebuild our users-api image and push it and then re apply user deployment.
+
+DNS for Pod to Pod Communication:
+Till now we have used hard coded IP address or environment variable to communicate pods internally within a cluster but there is an efficient way of achieving the same. So now we try to communicate pods internally using DNS. For that the DNS of a pod will be 'service-name.namespace'. We can assign namespace to our but that is a advance topic so we didnt do that and if we don't assign namespace manually kubernetes assign default namespace to our service. So the value of our AUTH_ADDRESS variable in users-deployment.yaml will be 'auth-service.default'  and apply changes and everything works.
+
+Challenge Create and deploy tasks-API:
+Here as we deployed our users and auth API now we will deploy our tasks api. For this we create a file named tasks-deployment.yaml and here we add our specs like our users file except we use an additional env variable for Tasks-folder. After that we create a service file also for this same as users service file and deploy it. 
+
+Adding a Containerized Frontend Contiainer:
+Till now we are communicating with our app using APIdog now we want to add frontend code for it so that we can communicate with it using browser. First we will deploy our frontend using docker locally and not inside our cluster. For this we modify our code a bit and here we add the address of our tasks-api service in our frontend code (app.js) and we also add additional headers in out tasks-app.js to allow it to accept requests from our browser. After that we rebuild our image of tasks api push it and re apply tasks deployment. Now that our Cluster is ready we create our frontend image and then run it locally and visit it in our browser, and here we can see our tasks and add task also.
+
+Deploying the Frontend with Kubernetes:
+Above we deployed our frontend in docker container but now we wanna deploy it in our Kubernetes cluseter. And here we create a separate Pod for it. For that first we ceate a deployment file for frontend similar to our users deployment file except here we don't use any variables for now. Then we create a service file also for our frontend similar to users service. After that we first push the docker image of our frontend to docker hub. Then we apply our service and deployment files of frontend. And now we can visit our app using our browser.
+
+Using the reverse Proxy for the Frontend:
+Earlier we deployed our frontend with tasks address hard coded but now we will use reverse proxy to redirect to our automatically assigned domain name. So for this we first replace our address in our app.js file of frontend here where we hardcoded our tasks api address and here replace it with /api('/api/tasks'). After that we will modify our nginx.conf file and here we add a reverse proxy. To add it we add the following code after listen 80;
+  location /api/ {
+    proxy_pass http://tasks-service.default:8000/;
+  }
+Here first we add /api/ which we used in app.js so whenever the it recieves a request /api/ it will redirected to proxy_pass which is automatically assigned domain name for tasks service and then we use port of task service.
+

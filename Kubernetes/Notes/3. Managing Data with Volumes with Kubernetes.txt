@@ -1,0 +1,118 @@
+Managing Data and Volumes with Kubernetes:
+Kubernetes and volumes: More than docker volumes:
+Understanding "State": State is data created and used by your application which must not be lost.
+i. User-generated data, user accounts,.... Often stored in database but could also be files (e.g. uploads).
+ii. Intermediate results derived by the app. Often stored in memory, temporary database tables or files.
+We already know the solution which is Volumes. Because we are still dealing with containers but there's a catch, while we using kubernetes we use kubernetes to run our containers so that's why we can't assing volumes to our docker containers. So kubernetes needs to be configured to add Volumes to our Containers and that's what we are gonna do next.
+
+Kubernetes Volumes: Theory and Docker comparison:
+Kubernetes can mount Volumes into Containers. 
+i. A broad variety of Volume types / drivers are supported.
+--> "Local" Volumes (i.e on Nodes).
+--> Cloud-provider specific Volumes.
+ii. Volume lifetime depends on the Pod lifetime. 
+--> Volumes survive container restarts (and removal).
+--> Volumes are removed when Pods are destroyed.
+Kubernetes Volumes vs Docker Volumes:
+--> Kubernetes Supports many different Drivers and Types, While in docker volumes basically no Driver / Type support.
+--> Kubernetes Volumes are not necessarily persistent while Docker volumes persist until manually cleared. 
+--> Kubernetes Volumes survive Container restarts and removals and same goes for docker Volumes.
+
+Creating a new Deployment and Service:
+Here we create a new Deployment and Service with similar config as earlier. Here our app in simple node app where we can send api requests. First we build and push our docker image. Then we apply our deployment and service files. After that we can send requests to our app. Here we are sending our data and storing it in a file named text.txt. This data will persist here until our pods restarts. That is why we wanna use Volumes.
+
+A First Volume: The emptyDir Type:
+For a Pod that defines an emptyDir volume, the volume is created when the Pod is assigned to a node. As the name says, the emptyDir volume is initially empty. All containers in the Pod can read and write the same files in the emptyDir volume, though that volume can be mounted at the same or different paths in each container. When a Pod is removed from a node for any reason, the data in the emptyDir is deleted permanently. A container crashing does not remove a Pod from a node. The data in an emptyDir volume is safe across container crashes.
+Here to use and test Volume first we modify our app.js file and here add code that crashes container while visiting /error:
+app.get('/error', () =>{
+  process.exit(1);
+});
+Aftet adding that crash point that then triggers pod restart, we modify our deployment file and here we add emptyDir volume that that is assigned to our pod. Inside spec.template.spec same level as containers we specify volumes and here we add volume named story-volume and emptyDir type. And to use our created volume with our pod we create a volumeMounts in spec.template.spec after image. And inside volumeMounts we wanna specify our our internal path which we want to monunt and name of the volume that we use our code will look like this:
+          volumeMounts:
+            - mountPaths: /app/story
+              name: story-volume
+      volumes:
+        - name: story-volume
+          emptyDir: {}
+After changing our deployment file we can apply changes and now when we send some data to our app and then we restart pod by crashing it, we can see that our data persists. Here everything working fine but if we change replicas to 2 or more and then if we apply these changes and now when we crash our app and then want try to see our stored data we get error because our one pod crashed and now second pod is running. So now we use anothe type of volume hostPath.
+
+A Second Volume: The hostPath Type:
+A hostPath volume mounts a file or directory from the host node's filesystem into your Pod. This is not something that most Pods will need, but it offers a powerful escape hatch for some applications. 
+To use hostPath we simply replace emptyDir with hostPath and specify some directory and in type we use DirectoryOrCreate that uses directory if it exists or create and use it if it doesn't exist.
+          hostPath:
+            path: /data
+            type: DirectoryOrCreates
+
+Understanding the CSI Volume Type:
+Container Storage Interface (CSI) defines a standard interface for container orchestration systems (like Kubernetes) to expose arbitrary storage systems to their container workloads. Once a CSI compatible volume driver is deployed on a Kubernetes cluster, users may use the csi volume type to attach or mount the volumes exposed by the CSI driver.
+
+From Volumes to Persistent Volumes:
+A PersistentVolume (PV) is a piece of storage in the cluster that has been provisioned by an administrator or dynamically provisioned using Storage Classes. It is a resource in the cluster just like a node is a cluster resource. PVs are volume plugins like Volumes, but have a lifecycle independent of any individual Pod that uses the PV. This API object captures the details of the implementation of the storage, be that NFS, iSCSI, or a cloud-provider-specific storage system.
+
+Definining a Persistent Volume:
+Here we create a separate file named host-pv.yaml in our project. Inside that file we define our persistent volume. We use hostPath as persistent volume, hostPath can be used as persistent volume but only for our local testing because hostPath only works with one node. So we write our file like this:
+apiVersion: v1
+kind: PersistentVolume
+metadata: 
+  name: host-pv
+spec:
+  capacity:
+    storage: 4Gi
+  volumeMode: Filesystem
+  accessModes:
+    - ReadWriteOnce
+  hostPath:
+    path: /data
+    type: DirectoryOrCreate
+Here in our PV file we specify type as PersistentVolume give it a name in metedata, then inside spec we define its capacity, then its volumeMode which can be Filesystem or Block. Then we define access mode like ReadWriteOnce, ReadOnlyMany, ReadWriteMany but for our hostPath type because it can only work with one node so only supported accessMode is ReadWriteOnce. And finally we define our type which is hostPath and here we define its path and type. Now that we have created our persistent volume all pods inside our node can use it and for this we need to create PersistentVolumeClaim.
+
+Creating a Persistent Volume Claim:
+Now that we have created our Persistent Volume now we create Persistent Volume Claim. To create a PVC we create a separate file named host-pvc.yml and inside that file we create our claim like this:
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: host-pvc
+spec:
+  volumeName: host-pv
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    request:
+      storage: 1Gi
+Here in this file we specify kind to PersistentVolumeClaim give it a name in metadata. Then inside spec we specify name of volume that we wanna claim (host-pv) then accessModes mean how to access this, then inside resources we create request and there specify how much storage we wanna claim (it should not exceed the amount we specified in host-pv). Now that we have created both our persistent volume and persistent volume claim now we use that pvc with our deployment. To do this we modify our deployment.yml file like this:
+      volumes:
+        - name: story-volume
+          persistentVolumeClaim:
+            claimName: host-pvc
+Here we kept everything same until volumes block and inside here after name of volume we assigned PVC to our pod and then provided the name of volume that we wanna use (host-pvc)
+
+NOTE: Command to get url of service: minikube service service-name
+
+Volumes vs Persistent Volumes:
+Volume:
+--> Volume is attached to Pod and Pod lifecycle while Persistent volume is a standalone Cluster resource (NOT attached to a Pod).
+--> Volumes are Defined and created together with Pod while Persistent Volume is created standalone, claimed via a PVC.
+--> Volumes are repetitive and hard to adiminister on a gloabal lever while Persistent Volumes can be defined once and used multiple times.
+
+Using Environment Variables:
+We can also use env variables instead of hard coding data. For this project we wanna use env variable for our folder name (story). To do this first we modify our app.js file and here we replace 'story' with process.env.STORY_FOLDER. Then to create this variabel we modify our deployment.yml file and here and here inside containers right after image, we create our variable:
+          env:
+            - name: STORY_FOLDER
+              value: story
+
+Environment Variables and Config Maps:
+As above we worked with environment variables and there we created environment variable in our deployment file directly, but now we wanna use a separate file where we define our env variables and then call then in our deployment file. To do this first we create a file (environment.yml) which contains:
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: data-store-env
+data:
+  folder: story
+Notice here kind is ConfigMap and instead of spec we used data and inside data we specify key and value for our variable. After that our env variable is created. Now to use this in our deployment file we go to our file and modify it like this:
+          env:
+            - name: STORY_FOLDER
+              valueFrom:
+                configMapKeyRef:
+                  name: data-store-env
+                  key: folder
+Here we are using some name for our variable (STORY_FOLDER) after that instead of value we are calling valureFrom and here we are refrencing it to configMapKeyRef and there name of our environment (data-store-env) that we defined in env file after name we are giving the key of our variable (folder).

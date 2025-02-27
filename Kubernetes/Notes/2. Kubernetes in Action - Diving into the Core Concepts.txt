@@ -1,0 +1,149 @@
+Kubernetes in Action:
+Understanding Kubernetes Objects (Resources):
+The "Pod" Object: 
+The smallest unit kubernetes interacts with.
+--> Contains and runs one or multiple containers, the most common use case is one container per pod.
+-->Pods contain shared resources (e.g. volumes) for all Pod containers.
+--> Has a cluster-internal IP by default, containers inside a Pod can communicate via localhost.
+Pods are designed to be ephermal: Kubernetes will start, stop and replace them as needed. Means that when they are removed and replaced all their data will be replaced.
+For Pods to be managed for you, you need a "Controller" (e.g a "Deployment").
+
+The "Deployment" Object:
+The Deployment object one or multiple Pods. 
+--> You set a desired state, Kubernetes then changes the actual state. Define which Pods and containers to run and the number of instances.
+--> Deployments can be paused, deleted and rolled back.
+--> Deployments can be scaled dynamically (and automatically). You can change the number of desired Pods as needed.
+Deployments manage a Pod (One kind of Pod) for you, you can also create multiple deployments. Multiple instances of that Pod are possible.
+You therefore typically don't directly control Pods, instead you use Deployments to set up the desired end state.
+
+Note: To start minikube we use command: minikube start --driver=docker
+A first Deployment using the Imperative Approach:
+Here we first create a docker file of our project and then use kubernetes to run it. For this first command will be 'docker build -t kub-first-app . .Before starting Deployment on kubernetes we make sure that our minikube is running using following command: minikube status. Now to use our image that we build earlier in our deployment we first need to push it to docker registry(i.e docker hub) because for now it is in our local machine but not in our virtual cluster. So for this we first tag our image with repo name using 'docker tag' command then we push it to docker-hub using 'docker-push' command. After that our image is pushed to docker-hub we can run the command to create deployment: 'kubectl create deployment first-app --image=sam519/kub-first-app'. Here in this command we using deployment type and first-app is name of deployment and --image is refering to image which is used. We can use commands: kubectl get deployments -> to see deployments and kubectl get pods -> to see pods. After creating our deployment we can use minikube dashboard to see status of our deployments.
+
+Kubectl: Behind the Scenes:
+With 'Kubectl create deployment --image...' command this create a deployment object and send it to cluster or master node, here in master node Scheduler analyzes currently running Pods and finds the best Node for the new Pod(s). From Worker node Kubelet manages the Pod and Containers. The Pod contains the container that runs on image that we specified
+
+The "Service" Object.
+To reach a Pod and the container running in a pod we need a service. The service Exposes Pods to the Cluster or Externally. Pods have an internal IP by default - it changes when a Pod is replaced. Finding Pods is hard if the IP changes all the time. Services group pods with a shared IP. Services can allow external access to Pods. The default (internal only) can be overwritten. Without Services, Pods are very hard to reach and communication is difficult. Reaching a Pod from outside the Cluster is not possible at all without Services.
+
+Exposing a deployment with a Service:
+Now we wanna expose our deployment using service so we can access/communicate with it. To do this we use command 'kubectl expose deployment first-app --type=LoadBalancer --port=8080' here we are using our deployment(first-app). After that we use command 'kubectl get services' to view our services. And here we can see that there under ExternalIP that status is <pending>, because we are using kubernetes locally and it can't assign IP address to services but on cloud loadbalancer automatically assigns IP. So for local setup we use another command to locally assign some port with our service and command is: minikube service first-app. 
+
+Restarting Containers:
+As we know that kubernetes automatically restarts failed pods(containers). So lets try this, in our node app visiting the address /error will crash the container and when we visit this in browser here we can see that page not load. And after visiting /error we can see using 'kubectl get pods' and see that how many times our pod restarted.
+
+Scaling in Action:
+We can scale our pods/containers using kubernetes. Like for example we want to create 3 replicas of our pod(first-app), so that traffic is distributed equally and if one or more fails our service keep running. We can use command 'kubectl scale deployment/first-app --replicas=3' to create 3 replicas of our deployment. We can then use same command with value 1 to reduce pods to one.
+
+Updating Deployments:
+Consider that everything is working fine but now we wanna update our deployment we can do this. Before that lets modify our image here we change our code in image and rebuild our image with -t sam519/first-app and the push it to dockerhub. Now that we update our image we also wanna update our deployment and we can do this using the following command: 'kubectl set image deployment/first-app kub-first-app=sam519/kub-first-app:tag (Tagging is important to update the image)' We can also see the rollout status of our deployment using command: 'kubectl rollout status deployment/first-app (deployment name)'.
+
+Deployment Rollback and History:
+Now that we wanna update our deployment with an image that doesn't exist that kubernetes will try to pull that image but doesn't shut down previously running pod. This means if there's an error in updating deployment we can roll back to our previous revision. We can view the status of our rollout by using the command: 'kubectl rollout status deployment/first-app' and if there's any problem with our update we can see here. And to undo/rollout from our latest deployment we can use the command: 'kubectl rollout undo deployment/first-app'.  Now to see the history of our all deployments we can use the command: 'kubectl rollout history deployment/first-app' and to see details of any revision we can use --revision=n flag with above command. Now if we wanna rollout to any previous deployment we can also achieve this. For example here I wanna rollout to my first deployment where we used original docker image prior to updating it. To roll out to our first deployment we can use the command: 'kubectl rollout undo deployment/first-app --to-revision=1'
+Till now we have used imperative approach, now we wanna switch to declarative approach. For this we will clear our workspace and for that delete our these deplyment and services. To delete our service we use: 'kubectl delete service first-app' and to delete our deployme we use: 'kubectl delete deployment first-app'.
+
+Imperative vs Declarative Approach:
+1. Imperative Approach
+The imperative approach involves directly instructing Kubernetes on what to do by executing commands. It is similar to running shell commands—each command changes the system state immediately. Comparable to using docker run.
+Characteristics:
+--> You manually run commands to create, update, or delete resources.
+--> You specify what to do, rather than the desired final state.
+--> Changes are not easily repeatable since they depend on executed commands.
+2. Declarative Approach
+The declarative approach involves describing the desired state of resources in configuration files (YAML or JSON), and Kubernetes ensures the actual state matches the desired state. Comparable to using Docker Compose.
+Characteristics:
+--> You define what you want, and Kubernetes figures out how to achieve it.
+--> Uses YAML/JSON configuration files.
+--> Uses kubectl apply to create/update resources.
+
+Creating a Deployment Configuration File (Declarative Approach):
+A configuration file in Kubernetes is a YAML or JSON document that describes a resource, such as a Pod, Deployment, Service, or ConfigMap. It contains metadata and specifications for the resource. 
+Here we create a congig file named deployment.yaml that contains:
+apiVersion:apps/v1
+kind: Deployment
+metadata:
+  name: second-app-deployment
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: second-app
+      tier: backend
+  template:
+    metadata:
+      labels:
+        app: second-app
+        tier: backend
+    spec:
+      containers:
+        - name: second-node-js
+          image: sam519/kub-first-app:2
+        #- name: second-node-js
+        # image: sam519/kub-first-app:2
+		
+We first start our file with apiVersion that defines the API version for the resource, then we specify kind which specifies the type of Kubernetes object, then we give metadata that contains resource name and labels, then we use spec that defines the desired state here replica Specifies 1 instance of the pod and selector ensures pods match labels and template defines how each pod should be created and containers list of containers inside the pod.
+After that the file is created we can use the command : 'kubectl apply -f=deployment.yaml' to apply our configuration.
+
+Creating a Service Declaritively:
+A Service in Kubernetes is an abstraction that exposes a set of Pods as a network service. It ensures that applications running inside the cluster can communicate with each other or with external users.
+A Service configuration file is a YAML or JSON file that defines how a Service should behave, including how it selects Pods and exposes them.
+Creating a file named service.yaml
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: backend
+spec:
+  selector:
+    app: second-app
+  ports:
+    - protocol: 'TCP'
+      port: 80
+      targetPort: 8080
+      nodePort: 30080
+  type: LoadBalancer
+
+Breakdown of Service File:
+apiVersion: v1	Uses Kubernetes API version v1
+kind: Service	Defines this as a Service resource
+metadata.name	Names the Service backend
+spec.selector	Selects Pods with the label app: second-app
+spec.ports.port	The local port on which the Service is exposed
+spec.ports.targetPort	The internal port on which the container is running
+spec.type	Defines how the Service is exposed
+After that we have created a service file we can apply it using command: 'kubectl apply -f service.yaml'
+
+Now that we have created our deployment and exposed it using service and if we wanna update our deployment, i.e change replicas, image or anything. We can achieve this by simply making our changes in deployment file and running: 'kubectl apply -f deployment.yaml' will apply all our change to our running deployment. And if we wanna delete our deployment we can do this by either running: 'kubectl delete -f deployment.yaml' or by: 'kubectl delete deployment second-app-deployment'
+
+Multiple vs Single Config File:
+We can use Single file for creating multiple kinds of objects like in our case deployment and service. For this we create a new file (master-deployment.yaml) and here first we paste service.yaml then we add three hyphens --- and then we paste deployment.yaml.
+
+More on Labels and Selectors:
+In Kubernetes, matchLabels and matchExpressions are used in selectors to filter and select resources (e.g., Pods) based on labels. They are primarily used in Deployments, Services, ReplicaSets, and Network Policies to identify which Pods should be affected.
+1. matchLabels (Simple Key-Value Matching)
+The matchLabels field allows you to select resources based on an exact key-value match.
+2. matchExpressions (Flexible Query Matching)
+The matchExpressions field allows more advanced filtering using conditions such as:
+i. In → Matches if a label key has a value in a given list.
+ii. NotIn → Matches if a label key does NOT have a value in a given list.
+iii. Exists → Matches if a label key exists, regardless of value.
+iv. DoesNotExist → Matches if a label key does NOT exist.
+
+Liveness Probes:
+A Liveness Probe in Kubernetes is used to check if a container is still running properly. If the probe fails, Kubernetes restarts the container automatically to restore its healthy state.
+Why Use a Liveness Probe?
+--> Sometimes, an application might hang (e.g., deadlock) and stop responding without crashing.
+--> Without a liveness probe, Kubernetes assumes a running container is healthy, even if it's unresponsive.
+--> Liveness probes detect such issues and restart the container to keep the application running.
+Types of Liveness Probes: Kubernetes supports three types of liveness probes:
+i. HTTP Probe (httpGet) --→ Calls an HTTP endpoint (e.g., /healthz) to check health.
+ii. Command Probe (exec) --→ Runs a command inside the container; if it succeeds, the container is healthy.
+iii. TCP Probe (tcpSocket) --→ Tries to establish a TCP connection on a specified port; success means the container is healthy.
+To add a liveness Probe in our configuration we can use it in spec.containers below image like this:
+      livenessProbe:
+        httpGet:
+          path: /
+          port: 8080
+        periodSeconds: 10
+	initialDelaySeconds: 5
+         

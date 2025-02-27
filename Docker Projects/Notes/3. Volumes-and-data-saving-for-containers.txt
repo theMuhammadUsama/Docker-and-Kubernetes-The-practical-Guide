@@ -1,0 +1,59 @@
+Data saving in containers:
+If we create a container that have files or generates files like a container that running a website that stores data and logs of website if we stop or restart container then data stays there and no problem BUT if we delete a container then all of its files also deleted means our web logs are deleted. This is because a container is read and writable and when we build a container it adds a layer over image that is read and writeable while the image is read only. So all data that generated and stored inside container is associated to container only and if we somehow delete our container all data is lost. No matter if we create another container based on same image or code the lost data that is gone with container is gone. 
+
+What is Volumes ?
+Volumes are folders on your host machine hard drive which are mounted (made available, mapped) into containers. With volumes we can connect a folder inside our container to a folder in our host machine, and change in either folder will be reflected in other folder. 
+--> Volumes persist if a container shuts down. If a container starts or restarts and mounts a volume, any data inside of that volume is available in the container.
+--> A container can write data into a volume and read data from it.
+
+There are two types of External Data Storages:
+1. Volumes(Managed by Docker)
+2. Bind Mounts(Managed by Us)
+There are two Types of Volumes:
+i. Anonymous Volumes: 
+Docker sets up a folder/path on your host machine, exact location is unknown to you (=dev). They are managed via docker volume commands.
+We can add VOLUME tag in our dockerfile i.e VOLUME [ "/app/feedback" ]
+These volumes are totally managed, named by docker and deleted once container is deleted. It is created specifically for a single container, and can't be shared across containers. It survives container shutdown/restart but if --rm is used it will be gone once containers is stop. Since its anonymous, it can't be re-used(even on same image). Anonymous volumes can be useful for locking or avoiding certain data from overwritten.
+ii. Named Volumes:
+A defined path in the container is mapped to the created volume/mount. e.g /some-path on your hosting machine is mapped to /app/data. It is great for data which should be persistent but which you don't need to edit directly. We assign named volume to a container when we run it using -v flag. i.e docker run -d -p 3000:80 --rm --name feedback-app -v feedback:/app/feedback feedback-node:latest. Here in feedback:/app/feedback the /app/feedback is a path inside our container that is connected with feedback folder inside our local machine and the (:) symbol is part of our syntax. They are general -not tied to any specific container, and survives container shutdown/restart- and can be removed via Docker CLI. It can be shared across containers and can be re-used for same container (across restart)
+Note: Anonymous volumes are attached to a specific container hence they are deletd when container is deleted while named volumes are not attache to a specific container.
+
+2. Bind Mounts:
+In Bind mounts we set the path on our local machine that will be mapped to container. We can put our source code inside that path. Bind mount is great for persistent and editable data i.e source code. To assign a bind mount to our container we use same -v tag as named volumes but here we add absolute path of folder or file on our local machine that will be mapped with folder or file inside container. Its location is on host file system, and not tied to any specific container. It survives container shutdown/restart and can be removed via host file system removal. Can be shared across containers and can be re-used for same container (across restarts). To add our bind mount in our container we can use like following syntax docker run -d -p 3000:80 --rm --name node-app -v feedback:/app/feedback -v "E:/Vs-Projects/5. Data-volumes-01-starting-setup/data-volumes-01-starting-setup:/app" nodeapp:namedvolume
+In my case like my feedback node app this will give error of express and other node dependencies because what bind mount does is it rewrites all the  code files inside container with files inside our local mapped folder, so that's why our npm install and node_modules folder is removed to overcome this hurdle we can modify our command. We can add additional anonymous volume with path to node_modules folder and what it will do is docker priortize volumes with more specific path over less specific path like /app/feeback over /app. So we will modify our code like this  docker run -d -p 3000:80 --rm --name node-app -v feedback:/app/feedback -v "E:/Vs-Projects/5. Data-volumes-01-starting-setup/data-volumes-01-starting-setup:/app" -v /app/node_modules nodeapp:namedvolume
+NOTE: We can assign anonymous volumes using both CLI as well as dockerfile. 
+
+Modifying our bind mounts to Read only by Docker: 
+When we assign a bind mount to a container by default the docker can read and write into it. Because that path is inside our local machine we didn't want docker to write into that path. We can modify our command using ro with our bind mount path. i.e "E:/Vs-Projects/5. Data-volumes-01-starting-setup/data-volumes-01-starting-setup:/app:ro" . Here ro makes sure that container can only read from our mapped path. But here is another problem we want our container to make changes in our feedback and temp folder which is inside our container. So to solve this hurdle we do same as we did with node_modules. We add another -v tag in our command and specify our temp folder and because our command already conatins named volumed to /app/feedback we don't need to define it again. So after all changes we our command will look like,  docker run -d -p 3000:80 --rm --name node-app -v feedback:/app/feedback -v "E:/Vs-Projects/5. Data-volumes-01-starting-setup/data-volumes-01-starting-setup:/app:ro" -v /app/node_modules -v /app/temp nodeapp:namedvolume 
+
+Managing Docker Volumes:
+We can manage docker volumes like we can create, remove, list all volumes, inspect a volume and prune all unused volumes. We can see all these options using docker volumes --help command.
+
+Using copy vs Bind Mounts:
+When we are using bind mounts then when ever we change our code it will be overwritten in container, so that means there is no need of copy command in dockerfile because we are mapping over local folder with container. But we only use bind mounts during development process so we can change and test our code but when we move to production we don't do that. So while in production we don't use bind mounts and we use copy command in dockerfile to take snapshot of our code and it can't be change. 
+
+Using .dockerignore file to restrict what not to copy:
+Sometimes when we use COPY . . command in dockerfile and we don't want to copy everything to our image from our local folder we can add .dockerignore file in our local directory. .dockerignore file used to restrict what not to be copied in our image. For example we have a folder node_modules inside our local directory where all our code and dockerfile is and we dont want to copy node_modules in our contaier we can specify node_modules folder inside our .dockerignore, to do this simply we just create a .dockerignore file inside our same folder where our code and dockerfile is and add names of all folder and files we doesn't want to copy inside our container.
+
+ARGuments and ENVironment Variables: 
+Docker supports build-time ARGuments and runtime ENVironment variable.
+ENV:
+An environment variable in Docker is a dynamic value passed to a container at runtime. It configures the container's behavior without modifying the image itself. This makes containers more flexible and adaptable to different environments (dev, test, prod). They are available inside of dockerfile and in application code. Can be set via ENV command in dockerfile or via --env/ -e on docker run. We can try this in our node app like this: Like in our server.js file at last line we specify our port like this  app.listen(80) we can modify our code to instead of hardcoding our port we can specify it later so our modified code look like this  app.listen(process.env.PORT). Now to we have different ways to specifying our env variable we can do this in our dockerfile, a separate .env file or during running a container. To specify in our docker file we can add ENV command after COPY command and specify our environment variable like: ENV PORT 80 and after that we can also use the name of variable with 
+EXPOSE command like this: EXPOSE $PORT. Now to specify our env variable when running a container we can add --env or -e tag and give the key:value pair of varible like this: --env PORT=80. If we specified our variable in dockerfile we can change its value with --env tag. We can also create a .env file and specify our env variables in it, like after creating .env file we add PORT=80 in it. and when we run our container we can use --env-file tag to give the location of that file like: --env-file ./.env   here we add / to tell docker that .env file is in our current directory. 
+--> Our code when we assign env variable while running container can be like this: docker run -d -p 3000:800 --env PORT=800 --rm --name node-app -v feedback:/app/feedback -v "E:/Vs-Projects/5. Data-volumes-01-starting-setup/data-volumes-01-starting-setup:/app:ro" -v /app/node_modules -v /app/temp nodeapp:namedvolume 
+--> Our code when we declare our env variable in a file:  docker run -d -p 3000:80 --env-file ./.env --rm --name node-app -v feedback:/app/feedback -v "E:/Vs-Projects/5. Data-volumes-01-starting-setup/data-volumes-01-starting-setup:/app:ro" -v /app/node_modules -v /app/temp nodeapp:namedvolume 
+ARG:
+Build arguments (build args) in Docker are used to pass variables to the Docker image during the build process. They allow you to customize the image at build time without modifying the Dockerfile directly. Unlike environment variables, build args are not available to the running container – they only exist while the image is being created. They are available inside of dockerfile, and not accessiable in CMD or any application code. Set while image is built(docker build) via --build-arg
+We can add argument in our dockerfile of our node project. Like we are adding argument of default port: ARG DEFAULT_PORT=80 and then also modify env command to: ENV PORT $DEFAULT_PORT. After that we can change the value of argument whenever we build image like: docker build -t feedback-node:dev --build-arg DEFAULT_PORT=8000 . hence the value of port will be changed form 80 to 8000.
+NOTE: As we know that our built image is based on layers so it is best to use env and arg after COPY command in our dockerfile because changes in them will cause running all layers after them.
+
+MODULE SUMMARY: 
+--> Container can read + write data. Volumes can help with data storage, Bind Mounts can help with direct container interaction.
+--> Containers can read+write data, but written data is lost if the container is removed.
+--> Volumes are folders on the host machine, managed by Docker, which are mounted into the Container.
+--> Named Volumes survive container removal and can therefore be used to store persistent data. 
+--> Anonymous Volumes are attached to a container - they can be used to save (temporary) data inside the container.
+--> Bind Mounts are folders on the host machine which are specified by the use and mounted into containers - like Named Volumes.
+--> Build ARGuments and Runtime ENViroment variables can be used to make images and containers more dynamic/ configurable.
+
+

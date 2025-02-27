@@ -1,0 +1,5 @@
+Understanding Data Categories in Container and images:
+There is usually three types of data in docker container
+i. Application Data: This is the data written and provided by developer and added to image and container in build phase. It is fixed and can't be changed once image is built. It is read only hence stored in images. i.e code + Environment
+ii. Temporary App Data: It is produced by running container and stored in temporary files. It is dynamic and changing, but cleared regularly. It is read and writeable data and temporary hence stored in containers. i.e user input
+iii. Permanent App Data: It is also produced by running containers and stored in files or databases. It must not be lost either if container stops or even deleted. It is read and writable, permanent, stored with containers and Volumes. i.e user accounts

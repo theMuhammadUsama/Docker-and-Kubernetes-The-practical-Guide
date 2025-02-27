@@ -1,0 +1,117 @@
+What is Docker?
+Docker is a container technology: A tool for creating and managing containers.
+Container: A standardized unit of software: A package of code and dependencies to run that code (e.g NodeJS code + the NodeJS runtime)
+--> The same container always yields the exact same application and execution behavior! No matter where or by whom it might be executed.
+--> Support for container is built into modern operating systems!.
+--> Docker simplifies the creation and management of such containers.
+
+Why Containers?
+Why would we want independent, standardized "application packages"?
+Because:
+-->Different Development & Production Environments: We want to build and test in exactly (!) the same environments as we later run our app in.
+--> Different Development Environments Within a Team / Company: Every team member should have the exactly (!) same environment when working on the same project.
+--> Clashing Tools / Versions Between Different Projects: When switching between projects, tools used in project A should not clash with tools used in project B.
+
+Docker Containers vs Virtual Machines.
+1. Docker Containers have low impact on OS, Fast speed and minimal disk space usage while Vitual Machines have bigger impact on OS, slower speed and higher disk space usage.
+2. In Containers sharing, re-building and distribution is easy while in VM's Sharing, re-building and distribution can be challenging.
+3. Containers encapsulate apps/ environments instead of "whole machines" while VM's encapsulate "whole machines" instead of just apps/ environments.
+
+What is an Image?
+A container image is a blueprint for creating containers.
+It is a static file that contains all the instructions required to create a container, including the operating system, application code, libraries, dependencies, and configurations.
+An image is read-only; when a container is created from an image, a writable layer is added on top of the image.
+Think of a container image as a template, and the container as a running instance based on that template. 
+
+Creating an Image:
+To create our image we need our code and a dockerfile that configure how to run that image.
+Like for example if we want to run a nodejs app inside docker we first write our js code then we create a docker file in that same directory 
+Docker file contain all the instructions that our image needs to execute.
+Dockerfile structure:
+1. FROM node  ##(comment) dockerfile typically start with from statements here first docker checks if our system have node image if not then it will search on docker hub
+2. WORKDIR /app ## it tells docker to set path /app and run all commands inside this directory instead of root directory. we can now also use second . instead of /app with copy command because we declared out working directory.
+3. COPY . /app ## first . tells docker that copy all files and sub directories that are in same directory as dockerfile and /app tells docker to copy these data into /app inside container (/app means it's the path inside container where all our files from out local machine will copy ) 
+4. RUN npm install ## it will tell docker to run this command; what this command will do is install all dependencies mentioned in package.json
+5. EXPOSE 80 ## This will tell docker that when container is started expose port 80 to our local machine.
+6. CMD ["node", "server.js"] ## This will tell docker to run server.js  when container is started note we are using cmd to run server because it will run server when we run container while if we use run command it will run server each time we build image.
+Note: We specify CMD command in last and if we dont specify cmd command the cmd of base image will be executed with no base image and no cmd we will get an error.
+An image is read only means after building our container if we make changes to our local files it have no effect on our container if we have to make any change in our container we have to rebuild it.
+Every image is layer based each instruction in dockerfile creates a layer and these layers are cached. If we create same image again then using caching the image will be build quickly but if we change something in code and then build again the docker will create all layers after changing layer again.
+For example if we make change in our code of node app we have to recreate image and docker rebuilds all layer after COPY . /app because changes are being made in code that is copied into /app But as we know we didn't make changes in our dependencies we so we can Optomize our dockerfile like this:
+COPY package.json /app
+RUN npm install
+COPY . /app
+Now if we modify our code in future again the RUN npm install will used from cached instead of running again.
+
+Building and running our container:
+After writing our docker file first we build our image then run our container.
+For building we open terminal and type docker build . ## (.) means build image from current directory if we are in different path then we can specify path instead of (.)
+To run our container we type docker run -p 3000:80 image-id  ## -p stands for publishing and here we declare 3000 which is local machine's port from which we can access exposed port of docker (80).
+After running our container we can see visiting localhost:3000 that our container is running.
+To stop our container we can use following command docker stop container-name.
+To restart or start a stopped container we can use following command docker start container-name.
+docker ps -a  is command to see all containers running or stopped.
+docker ps  is command to see running containers only.
+When we start our container using run command it runs in foreground and have attached mode by default WHILE when we use start command to run it runs in background and have detached mode by default we can use -a flag with start command to run container in attached mode.
+If we want to attach to a container means we can listen its output we can use the following command: docker attach container-name.
+We can also see the logs of a detached container using this command: docker logs -f conatainer-name
+
+Entering Interactive Mode:
+We have created our node we can see output using attached mode but going a bit further if we create another image that have simple python code that takes input from user we can interact with that python container and enter input either using attached or detached mode, so for example our python code take input of number to input number we can use -i (or --interactive) flag and -t (--tty allocate a pseudo-tty or terminal). 
+We can build our container same way as we build earlier but to run we need give to additional flags -i and -t to interact with our container so the run code will be docker run -it image-id
+Same goes if want to restart our container we add -a and -i flags like docker start -a -i container-name
+
+Delete images and containers:
+To delete a container we first have to stop the container the we can use the command to stop docker rm container-name 
+To delete an image first we have to make sure that the container that using that image is deleted then to delete the image we can use docker rmi image-id
+Note we can delete multiple containers and images with one command and we can also use docker image prune to delete all images at once.
+
+Removing Stopped containers Automatically:
+We can also use docker flag to automatically delete a container after it stopped to do this we use --rm flag with run command like docker run -p 3000:80 -d --rm image-id
+
+Inspecting Images: 
+We can inspect our create images to see information about image its configuration its OS etc to do this we use the following command docker image inspect image-id 
+
+Copying files into and from containers:
+We can copy files from our local machine to our running container and from our running container to our local machine. To copy file from local machine to container we use docker cp /path/to/file container-name:/directory-inside-container, i.e docker cp dummy/. boring_vaughan:/test  here (.) means copy all files from dummy directroy to /test directory of container named boring_vaughan.
+And to copy fies from running container to our local machine we can use same command but first container then local path i.e docker cp boring_vaughan:/test/file.txt /dummy
+
+Naming and Tagging Containers & Images:
+When we build our image we can give it a name and tag using -t flag, the -t flag takes name:tag value and assign them to image. i.e docker build -t python:1.0 . Note Tag is optional.
+We can also give names to our containers using --name flag. i.e docker run -p 3000:80 -d --rm --name myApp python:1.0 
+Note we can also use name tag instead of image-id 
+
+Sharing Images & Containers:
+Anyone who has image can build container. There are two ways of sharing an image:
+i. Share a dockerfile and source code files of image and the reciever can build image using docker build .
+ii. Share a Built Image: Share a complete built image with others. So others just need to download image and run container based on it.
+
+Sharing via Docker Hub or Private Registry:
+We can share our images on docker hub for free. It is official docker image registry. There we can also find public, private and "official" images.
+To share our image on docker hub we can use following command: docker push image-name. And to use an image from docker hub we use: docker pull image-name.
+We can also share and use an image from private registry. There are many providers that provide registries for image sharing. Here we can only push or pull our own or team images. To push or pull from private registry we can use above commands but we also need to include HOST:NAME to talk to private registry. 
+
+Pushing images to Docker hub: 
+To share our image on docker hub we first create repository on docker hub. Then we rename or tag our image in following structure, dockerhub-username/repo-name:tag like in my case sam519/my-node-app:tagname.
+We can change name of image using tag command like docker tag nodeapp:1.0 sam519/my-node-app.
+To push our image on docker hyb first we need to login from terminal using docker credientals and the command is docker login.
+After logging in we can push our image on docker hub using push command docker push sam519/my-node-app:nodeapp.
+We can also pull images from docker hub we don't need to login for it. To pull and image from dockerhub we can use docker pull sam519/my-node-app. We can also use docker run sam519/my-node-app command to pull and run images but it has it's limitations like it first searches locally for images and if it find even an old version of image it will run it, so that's why we use pull command to pull latest version then run command to run image.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

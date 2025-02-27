@@ -1,0 +1,65 @@
+Deploying Docker Containers:
+Containers work same in production as they work in development:
+--> Isolated, standalone environment.
+--> Reproducible environment, easy to share and use.
+Note: What works in our machine locally (in a container) will also work after deployment.
+Development to Production: Things to watch out for:
+--> Bind Mounts shouldn't be used in Production.
+--> Containerized apps might need a build step (e.g. React apps).
+--> Multi-Container projects might need to be split (or should be split) across multiple hosts / remote machines.
+--> Trade-offs between control and responsibility might be worth it!.
+
+Example: Deploying to AWS EC2:
+NOTE: AWS EC2 is a service that allows you to spin up and manage your own remote machines.
+Steps:
+--> Create and launch EC2 instance, VPC and Security group.
+--> Configure security group to expose all required ports to WWW.
+--> Connect to instance (SSH), install Docker and run container.
+
+Bind Mounts in Development vs Production:
+--> In Development Containers should encapsulate the runtime environment but not necessarily the code. VS In Production a container should really work standalone, you should NOT have source code on your remote machine (Image / Container is the "single source of truth").
+--> In Development Use "Bound Mounts" to provide your local host project files to the running container. VS In Production Use COPY to copy a code snapshot into the image.
+--> In Development Bind Mounts Allows for instant updates without restarting the container. VS In Production Ensures that every image runs without any extra, surrounding configuration or code.
+
+Creating our EC2 and Installing Docker there:
+First we create our EC2 with amazon linux OS on AWS and connect with it using ssh from our ubuntu in wsl. There after we use sudo yum update -y to update packages. After that we use following command to install docker there:  sudo amazon-linux-extras install docker. The command amazon-linux-extras makes its easy to install any software on our cloud machine. After that we use:  sudo service docker start  to start docker.
+Pushing our Image to Cloud:
+We can Deploy our source code or our image on host machine.
+We can Deploy all our source code on cloud machine and then build image there using docker build and then we can run it there using docker run. It has unnecessary complexity.
+OR
+We can Deploy our builted image on our cloud machine, for that first we build our image locally and then push it there and run it using docker run. Here we avoid unnecessary remote server work.
+
+Pushing our image on Dockerhub and then running it on EC2:
+First we build our image locally then we push it to our docker hub repository. Then we run our image in cloud machine using: sudo docker run -d --rm -p 80:80 sam519/deploy-1. Then we edit security group that is attached to our ec2 instance and here we inbound rules we add new rule. We set traffic HTTP and edit IP from anywhere then save rule. After that we copy the IP address of our EC2 instance and visit it in browser and we can see our node app running. Now if we make any change in our code locally and want it to reflect into our EC2 container, first we rebuild image then tag it with repo name then push it to dockerhub. After that we stop our container use pull command to pull updated image from dockerhub after that we run our container again.
+
+Disadvantages of Our Current Approach:
+--> We fully 'own' the remote machine so we're responsible for it (and it's security). i.e we have keep it's essential software updated and Manage network and security groups / firewall.
+--> SSHing into the machine to manage it can be annoying.
+
+From Manual Deployment to Managed Service:
+In our manual approach we own remote our remote machines (e.g AWS EC2). We ourselves create them, manage them, keep them updated, monitor them, scale them etc. It is great if you're an experienced admin / cloud expert. 
+Now We shift from manual approach to managed remote machines (e.g AWS ECS). In this approach creation, management, updating is handled automatically, monitoring and scaling is simplified. It is great if you simply want to deploy your app / containers. Here we have less control and also less responsibility.
+
+Deploy our App on AWS ECS:
+Now we will deploy our app on ECS which is fully managed service by AWS. Here first we search ECS in taskbar and open ECS. Then we start it using Get Started button here we select custom container option.....
+
+Deploy Multi container app on ECS:
+First we build the image of our goals-backend image then push it to docker hub. Then we create cluster (Fragrate) in ECS. Then in task definition we create new task definition. Give it a name, AWS Fargrate launch type, Task role as ecsTaskExecutionRole, Container one: name= goals-node image URI=sam519/goals-node, Container port=80 Protocol=TCP App protocol=HTTP, Environment Variables: MONGODB_(USERNAME, PASSWORD, URL), then in Docker configuration: Command: node, app.js
+After that we add another container here we name it mongodb image URI mongo add other settings and then create.
+After that we go into clusters select our cluster like goals-app create click create service. Inside service Compute option we select Launch type, launch type FARGATE, Application type Service, in Family Select our task like goals-node-task, revision 2(latest), service name goals-node-app, Replica, Desired task 1, then in networking select VPC default, select our subnets, Use existing security gourp, Public IP turned on, then in load balancing select application load balancer select container, create new load balancer give it name, create new listener port=80, HTTP, Create new Target group with HTTP protocol and the Create our service.
+
+Using EFS (Elastic File System) with ECS:
+Now we want to assign storage to our container to do this first we create EFS using EFS Console. Here we click create EFS, then give it a name then we add VPC we choose same VPC that we assigned to our ECS. Then we customize it and in network access section we choose VPC and select Security group that we created here -->. Then we also create a Security group for our EFS, give this security group a name and description then choose same VPC that we used for EFS and ECS, then set inbound rules like this: type = NFS, source = custom, and source = Security group of our ecs and then create it.<-- After that we select the security group that we just created here. Then simply click next and next to create our EFS. After that we edit our task here and click add volume , give it a name type= EFS, file system ID = EFS that we just created and save it. Then in our containers we select our container(mongodb), here in Storage and Logging select mount point =our name (data) and bound it to /data/db after that click update. After that click actions, select update service, check force deployment, and might adjust platform version. Then click skip to review and click create.
+
+A note about Databases:
+We can absolutely manage our own database containers but there are certain aspects we need to consider like:
+--> Scaling and managing availability can be challenging.
+--> Performance (also during traffic spikes) could be bad.
+--> Taking care about backups and security can be challenging.
+For these issuses we can consider using a managed Database service (e.g. AWS RDS, MongoDB Atlas etc).
+
+
+
+
+
+
